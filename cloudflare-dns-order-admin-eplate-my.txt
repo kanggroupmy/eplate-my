@@ -1,0 +1,14 @@
+;; Cloudflare DNS import file for eplate.my app subdomains
+;; Import in Cloudflare: DNS > Records > Import and Export > Import DNS records
+;;
+;; This file only changes the app subdomains.
+;; Keep the existing apex/root eplate.my records for the SEO site unchanged.
+;;
+;; Worker hostname:
+;; eplate-app.jkang-loh.workers.dev
+
+$ORIGIN eplate.my.
+$TTL 3600
+
+order  IN  CNAME  eplate-app.jkang-loh.workers.dev.
+admin  IN  CNAME  eplate-app.jkang-loh.workers.dev.

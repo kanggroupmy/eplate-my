@@ -92,6 +92,9 @@ wrangler.toml
 migrations/0001_initial.sql
 migrations/0002_seed_staff.sql
 src/worker.js
+public/index.html
+public/assets/app.js
+public/assets/styles.css
 ```
 
 Production API routes included:
