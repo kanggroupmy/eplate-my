@@ -267,13 +267,16 @@ function renderLogin(next = "#/order") {
           </div>
           <button class="btn primary" type="submit">Verify and continue</button>
         </form>
+        <div id="verify-error"></div>
       </div>
     `;
     document.querySelector("#verify-form").addEventListener("submit", (verifyEvent) => {
       verifyEvent.preventDefault();
-      const submitted = new FormData(verifyEvent.currentTarget).get("code");
-      if (!state.mockOtp || state.mockOtp.phone !== phone || state.mockOtp.code !== submitted || Date.now() > state.mockOtp.expiresAt) {
-        document.querySelector("#otp-area .success").outerHTML = `<p class="error">Invalid or expired OTP.</p>`;
+      const submitted = String(new FormData(verifyEvent.currentTarget).get("code") || "").trim();
+      const activeOtp = state.mockOtp;
+      const isSameScreenOtp = phone === activeOtp?.phone && code === activeOtp?.code;
+      if (!activeOtp || !isSameScreenOtp || activeOtp.code !== submitted || Date.now() > activeOtp.expiresAt) {
+        document.querySelector("#verify-error").innerHTML = `<p class="error">Invalid or expired OTP. Click Send OTP again if this code was generated in another tab.</p>`;
         return;
       }
       let customer = state.customers.find((item) => item.phone === phone);
