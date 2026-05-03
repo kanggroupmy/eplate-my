@@ -150,6 +150,15 @@ function downloadText(filename, content, mime = "text/plain") {
   URL.revokeObjectURL(url);
 }
 
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function downloadDataUrl(filename, dataUrl) {
   const a = document.createElement("a");
   a.href = dataUrl;
@@ -551,11 +560,49 @@ function invoiceText(order) {
   ].join("\n");
 }
 
+function pdfEscape(value = "") {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)");
+}
+
+function createInvoicePdf(order) {
+  const lines = invoiceText(order).split("\n");
+  const textCommands = lines.map((line, index) => {
+    const size = index === 0 ? 18 : 11;
+    const leading = index === 0 ? 24 : 16;
+    if (index === 0) return `/F1 ${size} Tf 50 780 Td (${pdfEscape(line)}) Tj`;
+    return `0 -${leading} Td /F1 ${size} Tf (${pdfEscape(line)}) Tj`;
+  }).join("\n");
+  const stream = `BT\n${textCommands}\nET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefAt = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`;
+  return new Blob([pdf], { type: "application/pdf" });
+}
+
 function bindInvoiceButtons() {
   document.querySelectorAll("[data-invoice]").forEach((button) => {
     button.addEventListener("click", () => {
       const order = state.orders.find((item) => item.id === button.dataset.invoice);
-      if (order) downloadText(`${order.invoiceId}.txt`, invoiceText(order));
+      if (order) downloadBlob(`${order.invoiceId}.pdf`, createInvoicePdf(order));
     });
   });
 }
