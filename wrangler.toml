@@ -1,0 +1,29 @@
+name = "eplate-app"
+main = "src/worker.js"
+compatibility_date = "2026-05-04"
+account_id = ""
+
+[assets]
+directory = "."
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "eplate-prod"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "eplate-uploads"
+
+[vars]
+APP_ENV = "preview"
+APP_BASE_URL = "https://order.eplate.my"
+ADMIN_BASE_URL = "https://admin.eplate.my"
+PRODUCT_PRICE_CENTS = "15000"
+SESSION_COOKIE_NAME = "eplate_session"
+COOKIE_DOMAIN = ".eplate.my"
+WHATSAPP_VERIFY_TOKEN = "replace-with-random-token"
+MOCK_PROVIDERS = "true"
