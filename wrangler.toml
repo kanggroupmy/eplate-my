@@ -13,6 +13,10 @@ database_name = "eplate-prod"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "eplate-uploads"
+
 [vars]
 APP_ENV = "preview"
 APP_BASE_URL = "https://order.eplate.my"
@@ -22,4 +26,4 @@ SESSION_COOKIE_NAME = "eplate_session"
 COOKIE_DOMAIN = ".eplate.my"
 WHATSAPP_VERIFY_TOKEN = "replace-with-random-token"
 MOCK_PROVIDERS = "true"
-FILE_STORAGE = "mock"
+FILE_STORAGE = "r2"
