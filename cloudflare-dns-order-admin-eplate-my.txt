@@ -5,10 +5,10 @@
 ;; Keep the existing apex/root eplate.my records for the SEO site unchanged.
 ;;
 ;; Worker hostname:
-;; eplate-app.jkang-loh.workers.dev
+;; eplate-order.jkang-loh.workers.dev
 
 $ORIGIN eplate.my.
 $TTL 3600
 
-order  IN  CNAME  eplate-app.jkang-loh.workers.dev.
-admin  IN  CNAME  eplate-app.jkang-loh.workers.dev.
+order  IN  CNAME  eplate-order.jkang-loh.workers.dev.
+admin  IN  CNAME  eplate-order.jkang-loh.workers.dev.
