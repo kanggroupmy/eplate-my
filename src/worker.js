@@ -27,11 +27,15 @@ async function handleApi(request, env, url) {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders() });
   if (url.pathname === "/api/health") return json({ ok: true, env: env.APP_ENV || "unknown" });
 
+  if (url.pathname === "/api/auth/logout" && request.method === "POST") return logout(request, env);
   if (url.pathname === "/api/auth/otp/request" && request.method === "POST") return requestOtp(request, env);
   if (url.pathname === "/api/auth/otp/verify" && request.method === "POST") return verifyOtp(request, env);
   if (url.pathname === "/api/customer/me" && request.method === "GET") return customerMe(request, env);
   if (url.pathname === "/api/orders" && request.method === "POST") return createOrder(request, env);
   if (url.pathname === "/api/orders" && request.method === "GET") return listCustomerOrders(request, env);
+
+  const customerOrder = url.pathname.match(/^\/api\/orders\/([^/]+)$/);
+  if (customerOrder && request.method === "PATCH") return updateCustomerOrder(request, env, customerOrder[1]);
 
   const orderFile = url.pathname.match(/^\/api\/orders\/([^/]+)\/files$/);
   if (orderFile && request.method === "POST") return uploadCustomerFile(request, env, orderFile[1]);
@@ -103,6 +107,15 @@ async function verifyOtp(request, env) {
   return createSessionResponse(env, customer.id, "customer", { customer });
 }
 
+async function logout(request, env) {
+  const token = readCookie(request, env.SESSION_COOKIE_NAME || "eplate_session");
+  if (token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(token)).run();
+  const domain = env.COOKIE_DOMAIN ? ` Domain=${env.COOKIE_DOMAIN};` : "";
+  return json({ ok: true }, 200, {
+    "set-cookie": `${env.SESSION_COOKIE_NAME || "eplate_session"}=; Path=/;${domain} HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+  });
+}
+
 async function customerMe(request, env) {
   const auth = await requireAuth(request, env, "customer");
   if (auth.response) return auth.response;
@@ -149,6 +162,21 @@ async function listCustomerOrders(request, env) {
   const auth = await requireAuth(request, env, "customer");
   if (auth.response) return auth.response;
   return json({ orders: await ordersForCustomer(env, auth.subject.id) });
+}
+
+async function updateCustomerOrder(request, env, orderId) {
+  const auth = await requireAuth(request, env, "customer");
+  if (auth.response) return auth.response;
+  const order = await orderById(env, orderId);
+  if (!order || order.customer_id !== auth.subject.id) return json({ error: "Order not found" }, 404);
+  const body = await request.json();
+  const chassis = String(body.chassis || "").trim().toUpperCase();
+  if (!chassis) return json({ error: "Chassis number is required" }, 400);
+  await env.DB.prepare("UPDATE orders SET chassis = ?, updated_at = ? WHERE id = ?")
+    .bind(chassis, now(), order.id)
+    .run();
+  await refreshOrderCompletionState(env, order.id);
+  return json({ order: await orderById(env, order.id) });
 }
 
 async function uploadCustomerFile(request, env, orderId) {

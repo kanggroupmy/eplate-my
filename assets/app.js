@@ -1,5 +1,7 @@
-const STORE_KEY = "eplate.preview.v1";
 const PRICE = 150;
+const ADMIN_HOST = location.hostname.startsWith("admin.");
+const STAFF_KEY = "eplate.staff.preview";
+let lastOtp = null;
 
 const statuses = [
   "Pending Payment",
@@ -16,55 +18,11 @@ const statuses = [
   "Refunded"
 ];
 
-const staffAccounts = [
-  { username: "admin", password: "admin123", role: "Admin" },
-  { username: "installer", password: "install123", role: "Installer" }
-];
-
-const initialData = {
-  customers: [],
-  orders: [],
-  messages: [],
-  sessions: { customerPhone: null, staff: null },
-  mockOtp: null,
-  orderSeq: 1000,
-  invoiceSeq: 5000
-};
-
-let state = loadState();
-
-function loadState() {
-  const raw = localStorage.getItem(STORE_KEY);
-  if (!raw) return structuredClone(initialData);
-  try {
-    return { ...structuredClone(initialData), ...JSON.parse(raw) };
-  } catch {
-    return structuredClone(initialData);
-  }
+function qs(selector) {
+  return document.querySelector(selector);
 }
 
-function saveState() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
-}
-
-function routeTo(hash) {
-  location.hash = hash;
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function fmtDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function money(value) {
-  return `RM${Number(value || 0).toFixed(2)}`;
-}
-
-function escapeHtml(value = "") {
+function html(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -81,174 +39,128 @@ function normalizePlate(plate) {
   return String(plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-function statusClass(status) {
-  const s = status.toLowerCase();
-  if (s.includes("paid") || s.includes("completed") || s.includes("ready")) return "paid";
-  if (s.includes("missing") || s.includes("pending")) return "pending";
-  if (s.includes("cancelled") || s.includes("refunded")) return "cancelled";
-  if (s.includes("processing") || s.includes("scheduled") || s.includes("arrived")) return "processing";
+function money(centsOrRinggit) {
+  const value = Number(centsOrRinggit || 0);
+  return `RM${(value > 1000 ? value / 100 : value).toFixed(2)}`;
+}
+
+function fmtDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function statusClass(status = "") {
+  const value = status.toLowerCase();
+  if (value.includes("completed") || value.includes("ready") || value.includes("paid")) return "paid";
+  if (value.includes("missing") || value.includes("pending")) return "pending";
+  if (value.includes("cancelled") || value.includes("refunded")) return "cancelled";
+  if (value.includes("processing") || value.includes("scheduled") || value.includes("arrived")) return "processing";
   return "";
 }
 
-function currentCustomer() {
-  return state.sessions.customerPhone
-    ? state.customers.find((customer) => customer.phone === state.sessions.customerPhone)
-    : null;
-}
-
-function customerOrders() {
-  const customer = currentCustomer();
-  if (!customer) return [];
-  return state.orders.filter((order) => order.customerPhone === customer.phone);
-}
-
-function addMessage(orderId, phone, template, body) {
-  state.messages.unshift({
-    id: `MSG-${Date.now()}`,
-    orderId,
-    phone,
-    template,
+async function api(path, options = {}) {
+  const headers = {};
+  let body;
+  if (options.form) {
+    body = options.form;
+  } else if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
+    body = JSON.stringify(options.body);
+  }
+  const response = await fetch(path, {
+    method: options.method || (body ? "POST" : "GET"),
+    headers,
     body,
-    status: "Mock sent",
-    createdAt: nowIso()
+    credentials: "include"
   });
-  saveState();
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+  if (!response.ok) throw new Error(payload?.error || payload || "Request failed");
+  return payload;
 }
 
-function nextOrderId() {
-  state.orderSeq += 1;
-  return `EP${state.orderSeq}`;
+function routeTo(hash) {
+  location.hash = hash;
 }
 
-function nextInvoiceId() {
-  state.invoiceSeq += 1;
-  return `INV-${state.invoiceSeq}`;
-}
-
-function readFiles(input) {
-  const files = Array.from(input.files || []);
-  return Promise.all(files.map((file) => new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({
-      name: file.name,
-      type: file.type || "application/octet-stream",
-      size: file.size,
-      dataUrl: reader.result
-    });
-    reader.onerror = () => resolve({ name: file.name, type: file.type || "application/octet-stream", size: file.size, dataUrl: "" });
-    reader.readAsDataURL(file);
-  })));
-}
-
-function downloadText(filename, content, mime = "text/plain") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadBlob(filename, blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadDataUrl(filename, dataUrl) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  a.click();
-}
-
-function appShell(content, active = "home") {
-  const customer = currentCustomer();
-  const staff = state.sessions.staff;
-  document.querySelector("#app").innerHTML = `
+function setApp(content, active = "") {
+  const staff = getStaff();
+  const nav = ADMIN_HOST ? `
+    <button class="${active === "staff" ? "active" : ""}" data-route="#/staff">Staff Login</button>
+    <button class="${active === "admin" ? "active" : ""}" data-route="#/admin">Admin</button>
+    <button class="${active === "installer" ? "active" : ""}" data-route="#/installer">Installer</button>
+    ${staff ? `<button data-action="logout">Logout ${html(staff.username)}</button>` : ""}
+  ` : `
+    <button class="${active === "home" ? "active" : ""}" data-route="#/">Home</button>
+    <button class="${active === "order" ? "active" : ""}" data-route="#/order">Order</button>
+    <button class="${active === "account" ? "active" : ""}" data-route="#/account">Account</button>
+    <button class="primary" data-route="#/login">Customer Login</button>
+  `;
+  qs("#app").innerHTML = `
     <div class="shell">
       <header class="topbar">
         <div class="brand">
           <div class="mark">JP</div>
-          <div>ePlate Order Preview</div>
+          <div>${ADMIN_HOST ? "ePlate Staff" : "ePlate Order"}</div>
         </div>
-        <nav class="nav">
-          <button class="${active === "home" ? "active" : ""}" data-route="#/">Home</button>
-          <button class="${active === "order" ? "active" : ""}" data-route="#/order">Order</button>
-          <button class="${active === "account" ? "active" : ""}" data-route="#/account">Account</button>
-          <button class="${active === "admin" ? "active" : ""}" data-route="#/staff">Staff</button>
-          ${customer ? `<button data-action="customer-logout">Logout ${escapeHtml(customer.phone)}</button>` : `<button class="primary" data-route="#/login">Customer Login</button>`}
-          ${staff ? `<button data-action="staff-logout">Staff Logout</button>` : ""}
-        </nav>
+        <nav class="nav">${nav}</nav>
       </header>
       <main class="wrap">${content}</main>
     </div>
   `;
+  document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => routeTo(button.dataset.route)));
+  qs("[data-action='logout']")?.addEventListener("click", async () => {
+    await api("/api/auth/logout", { method: "POST", body: {} }).catch(() => {});
+    sessionStorage.removeItem(STAFF_KEY);
+    routeTo(ADMIN_HOST ? "#/staff" : "#/");
+  });
 }
 
-function bindShellActions() {
-  document.querySelectorAll("[data-route]").forEach((button) => {
-    button.addEventListener("click", () => routeTo(button.dataset.route));
-  });
-  document.querySelector("[data-action='customer-logout']")?.addEventListener("click", () => {
-    state.sessions.customerPhone = null;
-    saveState();
-    routeTo("#/");
-  });
-  document.querySelector("[data-action='staff-logout']")?.addEventListener("click", () => {
-    state.sessions.staff = null;
-    saveState();
-    routeTo("#/staff");
-  });
+function getStaff() {
+  try {
+    return JSON.parse(sessionStorage.getItem(STAFF_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function showError(target, error) {
+  qs(target).innerHTML = `<p class="error">${html(error.message || error)}</p>`;
 }
 
 function renderHome() {
-  appShell(`
+  if (ADMIN_HOST) return renderStaffLogin();
+  setApp(`
     <section class="hero">
       <div>
-        <div class="kicker">Pre-launch working system</div>
-        <h1>Order flow, account, dashboard, and installer upload in one preview app.</h1>
-        <p class="lead">This version runs without paid hosting, SMS credits, ToyyibPay live keys, or WhatsApp API fees. It is ready for workflow testing while the public SEO site stays online separately.</p>
+        <div class="kicker">Customer order app</div>
+        <h1>Order your JPJePlate online.</h1>
+        <p class="lead">Login with phone OTP, enter vehicle details, preview your number plate, pay, upload documents, and download invoices from your account.</p>
         <div class="row">
-          <button class="btn primary" data-route="#/order">Start customer order</button>
-          <button class="btn" data-route="#/staff">Open staff dashboard</button>
+          <button class="btn primary" data-route="#/order">Start order</button>
+          <button class="btn" data-route="#/account">My account</button>
         </div>
       </div>
       <div class="panel">
         <div class="plate-preview">
           <div>
             <div class="plate-number">JLM8733</div>
-            <div class="plate-caption">Plate-only mockup preview</div>
+            <div class="plate-caption">Plate-only customer confirmation preview</div>
           </div>
         </div>
-        <div class="grid two" style="margin-top:18px">
-          <div class="card">
-            <div class="kicker">Customer</div>
-            <h3>Phone OTP login</h3>
-            <p class="muted small">Mock OTP appears on screen during preview. Later this connects to SMS.</p>
-          </div>
-          <div class="card">
-            <div class="kicker">Staff</div>
-            <h3>Admin + Installer</h3>
-            <p class="muted small">Admin manages orders. Installer can search plate and upload completion photos.</p>
-          </div>
-        </div>
+        <div class="price">${money(PRICE)}</div>
+        <p class="muted">Fixed product price. Geran/VOC and chassis can be uploaded after payment if not available during order.</p>
       </div>
     </section>
-  `);
-  bindShellActions();
+  `, "home");
 }
 
-function renderLogin(next = "#/order") {
-  appShell(`
+function renderCustomerLogin(next = "#/account") {
+  setApp(`
     <section class="panel" style="max-width:520px;margin:40px auto">
       <div class="kicker">Customer login</div>
-      <h2>Login with phone number</h2>
-      <p class="lead">No password. The preview uses mock OTP and shows the code after you click send.</p>
+      <h2>Login with phone OTP</h2>
+      <p class="lead">No password. In preview mode, the OTP is shown after sending.</p>
       <form class="form" id="otp-form">
         <div class="field">
           <label>Mobile number</label>
@@ -256,133 +168,116 @@ function renderLogin(next = "#/order") {
         </div>
         <button class="btn dark" type="submit">Send OTP</button>
       </form>
-      <div id="otp-area"></div>
+      <div id="login-result"></div>
     </section>
   `, "account");
-  bindShellActions();
-  document.querySelector("#otp-form").addEventListener("submit", (event) => {
+  qs("#otp-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const phone = normalizePhone(new FormData(event.currentTarget).get("phone"));
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    state.mockOtp = { phone, code, expiresAt: Date.now() + 5 * 60 * 1000 };
-    saveState();
-    document.querySelector("#otp-area").innerHTML = `
-      <div class="card" style="margin-top:16px">
-        <p class="success">Mock OTP sent. Demo code: ${code}</p>
-        <form class="form" id="verify-form">
-          <div class="field">
-            <label>OTP code</label>
-            <input name="code" inputmode="numeric" required>
-          </div>
-          <button class="btn primary" type="submit">Verify and continue</button>
-        </form>
-        <div id="verify-error"></div>
-      </div>
-    `;
-    document.querySelector("#verify-form").addEventListener("submit", (verifyEvent) => {
-      verifyEvent.preventDefault();
-      const submitted = String(new FormData(verifyEvent.currentTarget).get("code") || "").trim();
-      const activeOtp = state.mockOtp;
-      const isSameScreenOtp = phone === activeOtp?.phone && code === activeOtp?.code;
-      if (!activeOtp || !isSameScreenOtp || activeOtp.code !== submitted || Date.now() > activeOtp.expiresAt) {
-        document.querySelector("#verify-error").innerHTML = `<p class="error">Invalid or expired OTP. Click Send OTP again if this code was generated in another tab.</p>`;
-        return;
-      }
-      let customer = state.customers.find((item) => item.phone === phone);
-      if (!customer) {
-        customer = { phone, createdAt: nowIso() };
-        state.customers.push(customer);
-      }
-      state.sessions.customerPhone = phone;
-      state.mockOtp = null;
-      saveState();
-      routeTo(next);
-    });
+    try {
+      const result = await api("/api/auth/otp/request", { body: { phone } });
+      lastOtp = { phone, code: result.mockOtp };
+      qs("#login-result").innerHTML = `
+        <div class="card" style="margin-top:16px">
+          ${result.mockOtp ? `<p class="success">Mock OTP sent. Demo code: ${html(result.mockOtp)}</p>` : `<p class="success">OTP sent.</p>`}
+          <form class="form" id="verify-form">
+            <div class="field">
+              <label>OTP code</label>
+              <input name="code" inputmode="numeric" required>
+            </div>
+            <button class="btn primary" type="submit">Verify and continue</button>
+          </form>
+          <div id="verify-result"></div>
+        </div>
+      `;
+      qs("#verify-form").addEventListener("submit", async (verifyEvent) => {
+        verifyEvent.preventDefault();
+        const code = String(new FormData(verifyEvent.currentTarget).get("code") || "").trim();
+        try {
+          await api("/api/auth/otp/verify", { body: { phone: lastOtp.phone, code } });
+          routeTo(next);
+        } catch (error) {
+          showError("#verify-result", error);
+        }
+      });
+    } catch (error) {
+      showError("#login-result", error);
+    }
   });
 }
 
-function renderOrder() {
-  const customer = currentCustomer();
-  if (!customer) return renderLogin("#/order");
+async function requireCustomer(nextHash) {
+  try {
+    return await api("/api/customer/me");
+  } catch {
+    renderCustomerLogin(nextHash);
+    return null;
+  }
+}
+
+async function renderOrder() {
+  const me = await requireCustomer("#/order");
+  if (!me) return;
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
-  const reorderId = params.get("reorder");
-  const previous = state.orders.find((order) => order.id === reorderId && order.customerPhone === customer.phone);
-  appShell(`
+  const previous = (me.orders || []).find((order) => order.id === params.get("reorder"));
+  setApp(`
     <section>
       <div class="steps">
         <div class="step-pill active">1 Details</div>
         <div class="step-pill">2 Preview</div>
-        <div class="step-pill">3 Mock payment</div>
+        <div class="step-pill">3 Payment</div>
       </div>
       <div class="grid two">
         <form class="panel form" id="order-form">
           <div>
             <div class="kicker">New order</div>
             <h2>Vehicle and owner details</h2>
-            <p class="muted">Mandatory before payment: name, phone number, and vehicle plate. Geran/VOC and chassis can be added later.</p>
+            <p class="muted">Required before payment: owner name, mobile number, and vehicle plate.</p>
           </div>
-          <div class="field">
-            <label>Vehicle owner name *</label>
-            <input name="ownerName" required value="${escapeHtml(previous?.ownerName || "")}">
-          </div>
-          <div class="field">
-            <label>Vehicle owner mobile number *</label>
-            <input name="ownerPhone" required value="${escapeHtml(previous?.ownerPhone || customer.phone)}">
-          </div>
-          <div class="field">
-            <label>Vehicle plate number *</label>
-            <input name="plate" required value="${escapeHtml(previous?.plate || "")}" placeholder="JLM8733">
-          </div>
-          <div class="field">
-            <label>Vehicle brand</label>
-            <input name="brand" value="${escapeHtml(previous?.brand || "")}" placeholder="Toyota">
-          </div>
-          <div class="field">
-            <label>Chassis number</label>
-            <input name="chassis" value="${escapeHtml(previous?.chassis || "")}" placeholder="Can be added later">
-          </div>
+          <div class="field"><label>Vehicle owner name *</label><input name="ownerName" required value="${html(previous?.owner_name || "")}"></div>
+          <div class="field"><label>Vehicle owner mobile number *</label><input name="ownerPhone" required value="${html(previous?.owner_phone || me.customer.phone)}"></div>
+          <div class="field"><label>Vehicle plate number *</label><input name="plate" required placeholder="JLM8733" value="${html(previous?.plate || "")}"></div>
+          <div class="field"><label>Vehicle brand</label><input name="brand" placeholder="Toyota" value="${html(previous?.brand || "")}"></div>
+          <div class="field"><label>Chassis number</label><input name="chassis" placeholder="Can be added later" value="${html(previous?.chassis || "")}"></div>
           <div class="field">
             <label>Geran / VOC</label>
             <input name="geran" type="file" accept=".pdf,.jpg,.jpeg,.png,.heic">
             <div class="hint">Optional before payment, mandatory before processing.</div>
           </div>
           <button class="btn primary" type="submit">Review order</button>
+          <div id="order-error"></div>
         </form>
         <aside class="panel">
           <div class="kicker">Plate preview</div>
           <div class="plate-preview">
             <div>
-              <div class="plate-number" id="live-plate">${escapeHtml(previous?.plate || "ABC1234")}</div>
-              <div class="plate-caption">Customer confirms this before mock payment</div>
+              <div class="plate-number" id="live-plate">${html(previous?.plate || "ABC1234")}</div>
+              <div class="plate-caption">Confirm this before payment</div>
             </div>
           </div>
           <div class="price">${money(PRICE)}</div>
-          <p class="muted">Fixed product price for this preview. Admin settings can be added later when the backend exists.</p>
           <div id="review-box"></div>
         </aside>
       </div>
     </section>
   `, "order");
-  bindShellActions();
-  const form = document.querySelector("#order-form");
-  const plateInput = form.elements.plate;
-  plateInput.addEventListener("input", () => {
-    document.querySelector("#live-plate").textContent = normalizePlate(plateInput.value) || "ABC1234";
+  const form = qs("#order-form");
+  form.elements.plate.addEventListener("input", () => {
+    qs("#live-plate").textContent = normalizePlate(form.elements.plate.value) || "ABC1234";
   });
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
-    const geranFiles = await readFiles(form.elements.geran);
     const draft = {
       ownerName: String(data.ownerName).trim(),
       ownerPhone: normalizePhone(data.ownerPhone),
       plate: normalizePlate(data.plate),
       brand: String(data.brand || "").trim(),
       chassis: String(data.chassis || "").trim(),
-      geranFiles
+      geran: form.elements.geran.files[0] || null
     };
-    document.querySelector("#review-box").innerHTML = renderReview(draft);
-    document.querySelector("#confirm-order").addEventListener("click", () => createMockPaidOrder(draft));
+    qs("#review-box").innerHTML = renderReview(draft);
+    qs("#confirm-order").addEventListener("click", () => submitOrder(draft));
   });
 }
 
@@ -390,73 +285,59 @@ function renderReview(draft) {
   return `
     <div class="card" style="margin-top:18px">
       <h3>Confirm details</h3>
-      <div class="kv"><strong>Name</strong><span>${escapeHtml(draft.ownerName)}</span></div>
-      <div class="kv"><strong>Phone</strong><span>${escapeHtml(draft.ownerPhone)}</span></div>
-      <div class="kv"><strong>Plate</strong><span>${escapeHtml(draft.plate)}</span></div>
-      <div class="kv"><strong>Brand</strong><span>${escapeHtml(draft.brand || "-")}</span></div>
-      <div class="kv"><strong>Chassis</strong><span>${escapeHtml(draft.chassis || "Add later")}</span></div>
-      <div class="kv"><strong>Geran/VOC</strong><span>${draft.geranFiles.length ? draft.geranFiles.map((file) => escapeHtml(file.name)).join(", ") : "Upload later"}</span></div>
+      <div class="kv"><strong>Name</strong><span>${html(draft.ownerName)}</span></div>
+      <div class="kv"><strong>Phone</strong><span>${html(draft.ownerPhone)}</span></div>
+      <div class="kv"><strong>Plate</strong><span>${html(draft.plate)}</span></div>
+      <div class="kv"><strong>Brand</strong><span>${html(draft.brand || "-")}</span></div>
+      <div class="kv"><strong>Chassis</strong><span>${html(draft.chassis || "Add later")}</span></div>
+      <div class="kv"><strong>Geran/VOC</strong><span>${html(draft.geran?.name || "Upload later")}</span></div>
       <button class="btn primary full" id="confirm-order" type="button" style="margin-top:12px">Confirm and mock pay ${money(PRICE)}</button>
-      <p class="hint">Mock ToyyibPay will mark this payment as successful immediately.</p>
+      <p class="hint">Payment is still mocked until ToyyibPay keys are connected.</p>
+      <div id="pay-result"></div>
     </div>
   `;
 }
 
-function createMockPaidOrder(draft) {
-  const id = nextOrderId();
-  const invoiceId = nextInvoiceId();
-  const missingGeran = !draft.geranFiles.length;
-  const missingChassis = !draft.chassis;
-  const status = missingGeran ? "Missing Geran/VOC" : missingChassis ? "Missing Chassis Number" : "Ready For Processing";
-  const order = {
-    id,
-    invoiceId,
-    customerPhone: state.sessions.customerPhone,
-    ownerName: draft.ownerName,
-    ownerPhone: draft.ownerPhone,
-    plate: draft.plate,
-    brand: draft.brand,
-    chassis: draft.chassis,
-    geranFiles: draft.geranFiles,
-    installationFiles: [],
-    amount: PRICE,
-    paymentStatus: "Paid",
-    status,
-    installationAt: "",
-    createdAt: nowIso(),
-    paidAt: nowIso(),
-    completedAt: ""
-  };
-  state.orders.unshift(order);
-  addMessage(id, order.ownerPhone, "order_payment_confirmed", `Payment received for ${order.plate}. Invoice ${invoiceId} is ready.`);
-  saveState();
-  routeTo(`#/order-success?id=${id}`);
+async function submitOrder(draft) {
+  try {
+    const created = await api("/api/orders", { body: draft });
+    if (draft.geran) {
+      const form = new FormData();
+      form.append("kind", "geran");
+      form.append("file", draft.geran);
+      await api(`/api/orders/${created.order.id}/files`, { form });
+    }
+    await api(`/api/orders/${created.order.id}/mock-pay`, { method: "POST", body: {} });
+    routeTo(`#/order-success?id=${created.order.id}`);
+  } catch (error) {
+    showError("#pay-result", error);
+  }
 }
 
-function renderOrderSuccess() {
+async function renderOrderSuccess() {
   const id = new URLSearchParams(location.hash.split("?")[1] || "").get("id");
-  const order = state.orders.find((item) => item.id === id);
-  appShell(`
+  const me = await requireCustomer("#/account");
+  if (!me) return;
+  const order = (me.orders || []).find((item) => item.id === id);
+  setApp(`
     <section class="panel" style="max-width:720px;margin:36px auto">
-      <div class="kicker">Mock payment success</div>
-      <h2>Order ${escapeHtml(order?.id || "")} is paid</h2>
-      <p class="lead">A mock WhatsApp confirmation and invoice were generated. In production this will happen after ToyyibPay verifies the payment callback.</p>
+      <div class="kicker">Payment success</div>
+      <h2>Order ${html(order?.id || "")} is paid</h2>
+      <p class="lead">A mock WhatsApp confirmation and PDF invoice were generated.</p>
       ${order ? renderOrderSummary(order) : `<p class="error">Order not found.</p>`}
       <div class="row" style="margin-top:18px">
         <button class="btn primary" data-route="#/account">View account</button>
-        <button class="btn" data-invoice="${escapeHtml(order?.id || "")}">Download invoice</button>
+        ${order ? `<a class="btn" href="/api/invoices/${html(order.invoice_id)}.pdf">Download invoice PDF</a>` : ""}
       </div>
     </section>
   `, "account");
-  bindShellActions();
-  bindInvoiceButtons();
 }
 
-function renderAccount() {
-  const customer = currentCustomer();
-  if (!customer) return renderLogin("#/account");
-  const orders = customerOrders();
-  appShell(`
+async function renderAccount() {
+  const me = await requireCustomer("#/account");
+  if (!me) return;
+  const orders = me.orders || [];
+  setApp(`
     <section>
       <div class="row" style="justify-content:space-between;margin-bottom:18px">
         <div>
@@ -471,405 +352,201 @@ function renderAccount() {
       </div>
     </section>
   `, "account");
-  bindShellActions();
-  bindOrderActions();
-  bindInvoiceButtons();
+  bindCustomerOrderActions();
 }
 
 function renderCustomerOrderCard(order) {
+  const files = order.files || [];
+  const hasGeran = files.some((file) => file.kind === "geran");
   return `
     <article class="order-card">
       <div class="order-head">
         <div>
-          <strong>${escapeHtml(order.id)}</strong>
-          <div class="muted small">${escapeHtml(order.plate)} · ${escapeHtml(order.ownerName)}</div>
+          <strong>${html(order.id)}</strong>
+          <div class="muted small">${html(order.plate)} · ${html(order.owner_name)}</div>
         </div>
-        <span class="status ${statusClass(order.status)}">${escapeHtml(order.status)}</span>
+        <span class="status ${statusClass(order.status)}">${html(order.status)}</span>
       </div>
       ${renderOrderSummary(order)}
       <div class="row">
-        <button class="btn" data-invoice="${escapeHtml(order.id)}">Download invoice</button>
-        <button class="btn" data-route="#/order?reorder=${escapeHtml(order.id)}">Reorder plate</button>
-        ${!order.geranFiles.length ? `<label class="btn">Upload Geran/VOC<input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic" data-upload-geran="${escapeHtml(order.id)}" hidden></label>` : ""}
-        ${!order.chassis ? `<button class="btn" data-add-chassis="${escapeHtml(order.id)}">Add chassis</button>` : ""}
+        <a class="btn" href="/api/invoices/${html(order.invoice_id)}.pdf">Download invoice PDF</a>
+        <button class="btn" data-route="#/order?reorder=${html(order.id)}">Reorder plate</button>
+        ${!hasGeran ? `<label class="btn">Upload Geran/VOC<input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic" data-upload-geran="${html(order.id)}" hidden></label>` : ""}
+        ${!order.chassis ? `<button class="btn" data-add-chassis="${html(order.id)}">Add chassis</button>` : ""}
       </div>
     </article>
   `;
 }
 
 function renderOrderSummary(order) {
+  const files = order.files || [];
+  const hasGeran = files.some((file) => file.kind === "geran");
   return `
     <div class="grid two">
       <div>
-        <div class="kv"><strong>Invoice</strong><span>${escapeHtml(order.invoiceId)}</span></div>
-        <div class="kv"><strong>Amount</strong><span>${money(order.amount)}</span></div>
-        <div class="kv"><strong>Paid</strong><span>${fmtDate(order.paidAt)}</span></div>
-        <div class="kv"><strong>Installation</strong><span>${order.installationAt ? fmtDate(order.installationAt) : "-"}</span></div>
+        <div class="kv"><strong>Invoice</strong><span>${html(order.invoice_id)}</span></div>
+        <div class="kv"><strong>Amount</strong><span>${money(order.amount_cents)}</span></div>
+        <div class="kv"><strong>Paid</strong><span>${fmtDate(order.paid_at)}</span></div>
+        <div class="kv"><strong>Installation</strong><span>${fmtDate(order.installation_at)}</span></div>
       </div>
       <div>
-        <div class="kv"><strong>Geran/VOC</strong><span>${order.geranFiles.length ? order.geranFiles.map((file) => escapeHtml(file.name)).join(", ") : "Pending"}</span></div>
-        <div class="kv"><strong>Chassis</strong><span>${escapeHtml(order.chassis || "Pending")}</span></div>
-        <div class="kv"><strong>Install photos</strong><span>${order.installationFiles.length}/4 uploaded</span></div>
-        <div class="kv"><strong>Created</strong><span>${fmtDate(order.createdAt)}</span></div>
+        <div class="kv"><strong>Geran/VOC</strong><span>${hasGeran ? "Uploaded" : "Pending"}</span></div>
+        <div class="kv"><strong>Chassis</strong><span>${html(order.chassis || "Pending")}</span></div>
+        <div class="kv"><strong>Install photos</strong><span>${files.filter((file) => file.kind !== "geran").length}/4 uploaded</span></div>
+        <div class="kv"><strong>Created</strong><span>${fmtDate(order.created_at)}</span></div>
       </div>
     </div>
   `;
 }
 
-function bindOrderActions() {
+function bindCustomerOrderActions() {
   document.querySelectorAll("[data-upload-geran]").forEach((input) => {
     input.addEventListener("change", async () => {
-      const order = state.orders.find((item) => item.id === input.dataset.uploadGeran);
-      if (!order) return;
-      order.geranFiles = await readFiles(input);
-      if (order.geranFiles.length && order.chassis && order.status.includes("Missing")) order.status = "Ready For Processing";
-      saveState();
+      const form = new FormData();
+      form.append("kind", "geran");
+      form.append("file", input.files[0]);
+      await api(`/api/orders/${input.dataset.uploadGeran}/files`, { form });
       renderAccount();
     });
   });
   document.querySelectorAll("[data-add-chassis]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const chassis = prompt("Enter chassis number");
       if (!chassis) return;
-      const order = state.orders.find((item) => item.id === button.dataset.addChassis);
-      if (!order) return;
-      order.chassis = chassis.trim().toUpperCase();
-      if (order.geranFiles.length && order.status.includes("Missing")) order.status = "Ready For Processing";
-      saveState();
+      await api(`/api/orders/${button.dataset.addChassis}`, { method: "PATCH", body: { chassis } });
       renderAccount();
-    });
-  });
-}
-
-function invoiceText(order) {
-  return [
-    "ePlate.my Preview Invoice",
-    `Invoice: ${order.invoiceId}`,
-    `Order: ${order.id}`,
-    `Date paid: ${fmtDate(order.paidAt)}`,
-    "",
-    `Customer: ${order.ownerName}`,
-    `Phone: ${order.ownerPhone}`,
-    `Vehicle plate: ${order.plate}`,
-    `Vehicle brand: ${order.brand || "-"}`,
-    "",
-    `JPJePlate package: ${money(order.amount)}`,
-    "Payment method: Mock ToyyibPay",
-    "",
-    "This is a pre-launch preview invoice generated locally."
-  ].join("\n");
-}
-
-function pdfEscape(value = "") {
-  return String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll("(", "\\(")
-    .replaceAll(")", "\\)");
-}
-
-function createInvoicePdf(order) {
-  const lines = invoiceText(order).split("\n");
-  const textCommands = lines.map((line, index) => {
-    const size = index === 0 ? 18 : 11;
-    const leading = index === 0 ? 24 : 16;
-    if (index === 0) return `/F1 ${size} Tf 50 780 Td (${pdfEscape(line)}) Tj`;
-    return `0 -${leading} Td /F1 ${size} Tf (${pdfEscape(line)}) Tj`;
-  }).join("\n");
-  const stream = `BT\n${textCommands}\nET`;
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xrefAt = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`;
-  return new Blob([pdf], { type: "application/pdf" });
-}
-
-function bindInvoiceButtons() {
-  document.querySelectorAll("[data-invoice]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const order = state.orders.find((item) => item.id === button.dataset.invoice);
-      if (order) downloadBlob(`${order.invoiceId}.pdf`, createInvoicePdf(order));
     });
   });
 }
 
 function renderStaffLogin() {
-  appShell(`
+  setApp(`
     <section class="panel" style="max-width:520px;margin:40px auto">
       <div class="kicker">Staff login</div>
       <h2>Admin and installer access</h2>
-      <p class="lead">Preview accounts are listed in the README. Production will use hashed passwords and server sessions.</p>
       <form class="form" id="staff-login">
-        <div class="field">
-          <label>Username</label>
-          <input name="username" required>
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <input name="password" type="password" required>
-        </div>
+        <div class="field"><label>Username</label><input name="username" required></div>
+        <div class="field"><label>Password</label><input name="password" type="password" required></div>
         <button class="btn primary" type="submit">Login</button>
       </form>
-      <p class="hint">Admin: admin / admin123. Installer: installer / install123.</p>
-      <div id="staff-error"></div>
+      <div id="staff-result"></div>
     </section>
-  `, "admin");
-  bindShellActions();
-  document.querySelector("#staff-login").addEventListener("submit", (event) => {
+  `, "staff");
+  qs("#staff-login").addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const account = staffAccounts.find((item) => item.username === data.username && item.password === data.password);
-    if (!account) {
-      document.querySelector("#staff-error").innerHTML = `<p class="error">Invalid staff login.</p>`;
-      return;
+    try {
+      const result = await api("/api/admin/login", { body: data });
+      sessionStorage.setItem(STAFF_KEY, JSON.stringify(result.staff));
+      routeTo(result.staff.role === "Installer" ? "#/installer" : "#/admin");
+    } catch (error) {
+      showError("#staff-result", error);
     }
-    state.sessions.staff = { username: account.username, role: account.role };
-    saveState();
-    routeTo(account.role === "Installer" ? "#/installer" : "#/admin");
   });
 }
 
-function renderStaffEntry() {
-  const staff = state.sessions.staff;
-  if (!staff) return renderStaffLogin();
-  return staff.role === "Installer" ? routeTo("#/installer") : routeTo("#/admin");
-}
-
-function renderAdmin() {
-  const staff = state.sessions.staff;
-  if (!staff) return renderStaffLogin();
-  if (staff.role !== "Admin") return routeTo("#/installer");
-  const sortedOrders = [...state.orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  appShell(`
-    <section class="split">
-      <aside class="side">
-        <div class="card">
-          <div class="kicker">Admin</div>
-          <h3>${escapeHtml(staff.username)}</h3>
-          <p class="muted small">Can manage all orders, statuses, exports, invoices, documents, and WhatsApp logs.</p>
-        </div>
-        <div class="card form">
-          <div class="field">
-            <label>Export from Order ID</label>
-            <input id="export-from" placeholder="EP1001">
+async function renderAdmin() {
+  if (!ADMIN_HOST) return routeTo("#/");
+  try {
+    const data = await api("/api/admin/orders");
+    const orders = data.orders || [];
+    setApp(`
+      <section class="split">
+        <aside class="side">
+          <div class="card">
+            <div class="kicker">Admin</div>
+            <h3>Order management</h3>
+            <p class="muted small">Manage statuses, installation dates, invoices, documents, and exports.</p>
           </div>
-          <div class="field">
-            <label>Export to Order ID</label>
-            <input id="export-to" placeholder="EP1010">
+          <div class="card form">
+            <div class="field"><label>Export from Order ID</label><input id="export-from" placeholder="EP1234"></div>
+            <div class="field"><label>Export to Order ID</label><input id="export-to" placeholder="EP1299"></div>
+            <button class="btn dark" id="export-csv">Export Excel CSV</button>
           </div>
-        </div>
-        <button class="btn dark" id="export-csv">Export Excel CSV</button>
-        <button class="btn" id="seed-order">Add sample order</button>
-        <button class="btn danger" id="reset-demo">Reset demo data</button>
-      </aside>
-      <div class="grid">
-        <div>
-          <div class="kicker">Orders</div>
-          <h2>Customer orders</h2>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Order</th><th>Customer</th><th>Plate</th><th>Payment</th><th>Status</th><th>Missing</th><th>Install</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${sortedOrders.length ? sortedOrders.map(renderAdminRow).join("") : `<tr><td colspan="8">No orders yet.</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-        <div class="grid two">
-          <div class="panel">
-            <h3>Mock WhatsApp log</h3>
-            <div class="message-log">
-              ${state.messages.length ? state.messages.map((message) => `
-                <div class="log-item">
-                  <strong>${escapeHtml(message.template)}</strong>
-                  <div>${escapeHtml(message.body)}</div>
-                  <div class="muted">${escapeHtml(message.phone)} · ${fmtDate(message.createdAt)}</div>
-                </div>
-              `).join("") : `<div class="empty">No messages yet.</div>`}
-            </div>
+        </aside>
+        <div class="grid">
+          <div>
+            <div class="kicker">Orders</div>
+            <h2>Customer orders</h2>
           </div>
-          <div class="panel">
-            <h3>Provider mode</h3>
-            <p class="muted">OTP, payment, WhatsApp, invoice delivery, and file storage are mocked. This lets you test the business workflow now without monthly fees.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Order</th><th>Customer</th><th>Plate</th><th>Payment</th><th>Status</th><th>Files</th><th>Install</th><th>Actions</th></tr></thead>
+              <tbody>${orders.length ? orders.map(renderAdminRow).join("") : `<tr><td colspan="8">No orders yet.</td></tr>`}</tbody>
+            </table>
           </div>
+          <div id="admin-result"></div>
         </div>
-      </div>
-    </section>
-  `, "admin");
-  bindShellActions();
-  bindAdminActions();
+      </section>
+    `, "admin");
+    bindAdminActions();
+  } catch (error) {
+    renderStaffLogin();
+    qs("#staff-result").innerHTML = `<p class="error">${html(error.message)}. Login again.</p>`;
+  }
 }
 
 function renderAdminRow(order) {
-  const missing = [
-    !order.geranFiles.length ? "Geran/VOC" : "",
-    !order.chassis ? "Chassis" : "",
-    order.status === "Installation Proof Pending" && order.installationFiles.length < 4 ? "Install photos" : ""
-  ].filter(Boolean).join(", ") || "-";
+  const files = order.files || [];
   return `
     <tr>
-      <td><strong>${escapeHtml(order.id)}</strong><br><span class="muted">${escapeHtml(order.invoiceId)}</span></td>
-      <td>${escapeHtml(order.ownerName)}<br><span class="muted">${escapeHtml(order.ownerPhone)}</span></td>
-      <td><strong>${escapeHtml(order.plate)}</strong><br><span class="muted">${escapeHtml(order.brand || "-")}</span></td>
-      <td><span class="status paid">${escapeHtml(order.paymentStatus)}</span><br>${money(order.amount)}</td>
-      <td>
-        <select data-status="${escapeHtml(order.id)}">
-          ${statuses.map((status) => `<option ${status === order.status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
-        </select>
-      </td>
-      <td>${escapeHtml(missing)}</td>
-      <td><input type="datetime-local" data-install-date="${escapeHtml(order.id)}" value="${order.installationAt ? order.installationAt.slice(0,16) : ""}"></td>
-      <td>
-        <div class="row">
-          <button class="btn" data-invoice="${escapeHtml(order.id)}">Invoice</button>
-          <button class="btn" data-view-docs="${escapeHtml(order.id)}">Docs</button>
-        </div>
-      </td>
+      <td><strong>${html(order.id)}</strong><br><span class="muted">${html(order.invoice_id)}</span></td>
+      <td>${html(order.owner_name)}<br><span class="muted">${html(order.owner_phone)}</span></td>
+      <td><strong>${html(order.plate)}</strong><br><span class="muted">${html(order.brand || "-")}</span></td>
+      <td><span class="status ${order.payment_status === "Paid" ? "paid" : "pending"}">${html(order.payment_status)}</span><br>${money(order.amount_cents)}</td>
+      <td><select data-status="${html(order.id)}">${statuses.map((status) => `<option ${status === order.status ? "selected" : ""}>${html(status)}</option>`).join("")}</select></td>
+      <td>${files.length ? files.map((file) => `<a class="file-chip" href="/api/admin/files/${html(file.id)}">${html(file.kind)}</a>`).join(" ") : "-"}</td>
+      <td><input type="datetime-local" data-install-date="${html(order.id)}" value="${order.installation_at ? order.installation_at.slice(0, 16) : ""}"></td>
+      <td><a class="btn" href="/api/invoices/${html(order.invoice_id)}.pdf">Invoice</a></td>
     </tr>
   `;
 }
 
 function bindAdminActions() {
-  bindInvoiceButtons();
   document.querySelectorAll("[data-status]").forEach((select) => {
-    select.addEventListener("change", () => {
-      const order = state.orders.find((item) => item.id === select.dataset.status);
-      if (!order) return;
-      order.status = select.value;
-      if (select.value === "Completed" && !order.completedAt) {
-        order.completedAt = nowIso();
-        addMessage(order.id, order.ownerPhone, "installation_completed", `Installation completed for ${order.plate}. Ask us about car insurance renewal support.`);
-      }
-      saveState();
+    select.addEventListener("change", async () => {
+      await api(`/api/admin/orders/${select.dataset.status}`, { method: "PATCH", body: { status: select.value } });
       renderAdmin();
     });
   });
   document.querySelectorAll("[data-install-date]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const order = state.orders.find((item) => item.id === input.dataset.installDate);
-      if (!order) return;
-      order.installationAt = input.value ? new Date(input.value).toISOString() : "";
-      if (order.installationAt) {
-        order.status = "Installation Scheduled";
-        addMessage(order.id, order.ownerPhone, "installation_scheduled", `Installation for ${order.plate} is scheduled on ${fmtDate(order.installationAt)}.`);
-      }
-      saveState();
+    input.addEventListener("change", async () => {
+      const installationAt = input.value ? new Date(input.value).toISOString() : "";
+      await api(`/api/admin/orders/${input.dataset.installDate}`, { method: "PATCH", body: { installationAt } });
       renderAdmin();
     });
   });
-  document.querySelectorAll("[data-view-docs]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const order = state.orders.find((item) => item.id === button.dataset.viewDocs);
-      if (!order) return;
-      const docs = [...order.geranFiles, ...order.installationFiles];
-      if (!docs.length) return alert("No documents uploaded yet.");
-      docs.forEach((file) => file.dataUrl && downloadDataUrl(file.name, file.dataUrl));
-    });
-  });
-  document.querySelector("#export-csv")?.addEventListener("click", () => {
-    const from = Number(String(document.querySelector("#export-from")?.value || "").replace(/\D/g, "")) || 0;
-    const to = Number(String(document.querySelector("#export-to")?.value || "").replace(/\D/g, "")) || Number.MAX_SAFE_INTEGER;
-    const exportOrders = state.orders.filter((order) => {
-      const orderNo = Number(order.id.replace(/\D/g, ""));
-      return orderNo >= from && orderNo <= to;
-    });
-    const headers = ["Order ID", "Invoice", "Name", "Phone", "Plate", "Brand", "Payment", "Amount", "Status", "Geran", "Chassis", "Install Date", "Created"];
-    const rows = exportOrders.map((order) => [
-      order.id,
-      order.invoiceId,
-      order.ownerName,
-      order.ownerPhone,
-      order.plate,
-      order.brand || "",
-      order.paymentStatus,
-      order.amount,
-      order.status,
-      order.geranFiles.length ? "Uploaded" : "Pending",
-      order.chassis || "Pending",
-      order.installationAt || "",
-      order.createdAt
-    ]);
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
-    downloadText("eplate-orders.csv", csv, "text/csv");
-  });
-  document.querySelector("#seed-order")?.addEventListener("click", () => {
-    const phone = "+60107607333";
-    if (!state.customers.find((customer) => customer.phone === phone)) state.customers.push({ phone, createdAt: nowIso() });
-    const order = {
-      id: nextOrderId(),
-      invoiceId: nextInvoiceId(),
-      customerPhone: phone,
-      ownerName: "Demo Customer",
-      ownerPhone: phone,
-      plate: "JLM8733",
-      brand: "Toyota",
-      chassis: "",
-      geranFiles: [],
-      installationFiles: [],
-      amount: PRICE,
-      paymentStatus: "Paid",
-      status: "Missing Geran/VOC",
-      installationAt: "",
-      createdAt: nowIso(),
-      paidAt: nowIso(),
-      completedAt: ""
-    };
-    state.orders.unshift(order);
-    addMessage(order.id, phone, "order_payment_confirmed", `Payment received for ${order.plate}. Invoice ${order.invoiceId} is ready.`);
-    saveState();
-    renderAdmin();
-  });
-  document.querySelector("#reset-demo")?.addEventListener("click", () => {
-    if (!confirm("Reset all preview data in this browser?")) return;
-    state = structuredClone(initialData);
-    saveState();
-    renderAdmin();
+  qs("#export-csv")?.addEventListener("click", () => {
+    const from = encodeURIComponent(qs("#export-from").value || "");
+    const to = encodeURIComponent(qs("#export-to").value || "");
+    location.href = `/api/admin/orders.csv?from=${from}&to=${to}`;
   });
 }
 
 function renderInstaller() {
-  const staff = state.sessions.staff;
-  if (!staff) return renderStaffLogin();
-  appShell(`
+  if (!ADMIN_HOST) return routeTo("#/");
+  setApp(`
     <section class="panel" style="max-width:760px;margin:28px auto">
       <div class="kicker">Installer mobile flow</div>
       <h2>Search by vehicle plate</h2>
-      <p class="lead">Installer accounts can only find an existing order by plate and upload installation proof photos.</p>
+      <p class="lead">Installer accounts can find an existing order by plate and upload installation proof photos.</p>
       <form class="form" id="installer-search">
-        <div class="field">
-          <label>Vehicle plate</label>
-          <input name="plate" required placeholder="JLM8733">
-        </div>
+        <div class="field"><label>Vehicle plate</label><input name="plate" required placeholder="JLM8733"></div>
         <button class="btn primary" type="submit">Find order</button>
       </form>
       <div id="installer-result"></div>
     </section>
-  `, "admin");
-  bindShellActions();
-  document.querySelector("#installer-search").addEventListener("submit", (event) => {
+  `, "installer");
+  qs("#installer-search").addEventListener("submit", async (event) => {
     event.preventDefault();
     const plate = normalizePlate(new FormData(event.currentTarget).get("plate"));
-    const order = state.orders.find((item) => item.plate === plate);
-    document.querySelector("#installer-result").innerHTML = order ? renderInstallerUpload(order) : `<div class="empty" style="margin-top:16px">No order found for ${escapeHtml(plate)}.</div>`;
-    bindInstallerUpload(order);
+    try {
+      const result = await api(`/api/installer/orders/plate/${plate}`);
+      qs("#installer-result").innerHTML = renderInstallerUpload(result.order);
+      bindInstallerUpload(result.order);
+    } catch (error) {
+      showError("#installer-result", error);
+    }
   });
 }
 
@@ -877,58 +554,51 @@ function renderInstallerUpload(order) {
   return `
     <div class="card" style="margin-top:18px">
       <div class="order-head">
-        <div>
-          <h3>${escapeHtml(order.plate)}</h3>
-          <p class="muted">${escapeHtml(order.ownerName)} · ${escapeHtml(order.ownerPhone)}</p>
-        </div>
-        <span class="status ${statusClass(order.status)}">${escapeHtml(order.status)}</span>
+        <div><h3>${html(order.plate)}</h3><p class="muted">${html(order.owner_name)} · ${html(order.owner_phone)}</p></div>
+        <span class="status ${statusClass(order.status)}">${html(order.status)}</span>
       </div>
       <form class="form" id="install-upload">
         <div class="grid two">
-          <div class="field"><label>Front vehicle pic</label><input name="front" type="file" accept="image/*" capture="environment" required></div>
-          <div class="field"><label>Rear vehicle pic</label><input name="rear" type="file" accept="image/*" capture="environment" required></div>
-          <div class="field"><label>QR sticker</label><input name="qr" type="file" accept="image/*" capture="environment" required></div>
-          <div class="field"><label>Chassis number</label><input name="chassisPhoto" type="file" accept="image/*" capture="environment" required></div>
+          <div class="field"><label>Front vehicle pic</label><input name="front_vehicle" type="file" accept="image/*" capture="environment" required></div>
+          <div class="field"><label>Rear vehicle pic</label><input name="rear_vehicle" type="file" accept="image/*" capture="environment" required></div>
+          <div class="field"><label>QR sticker</label><input name="qr_sticker" type="file" accept="image/*" capture="environment" required></div>
+          <div class="field"><label>Chassis number</label><input name="chassis_photo" type="file" accept="image/*" capture="environment" required></div>
         </div>
         <button class="btn primary" type="submit">Submit installation proof</button>
       </form>
+      <div id="install-result"></div>
     </div>
   `;
 }
 
 function bindInstallerUpload(order) {
-  const form = document.querySelector("#install-upload");
-  if (!form || !order) return;
-  form.addEventListener("submit", async (event) => {
+  qs("#install-upload").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const files = [];
-    for (const input of form.querySelectorAll("input[type='file']")) {
-      const read = await readFiles(input);
-      if (read[0]) files.push({ ...read[0], name: `${input.name}-${read[0].name}` });
+    const form = new FormData(event.currentTarget);
+    try {
+      await api(`/api/installer/orders/${order.id}/installation-files`, { form });
+      qs("#install-result").innerHTML = `<p class="success">Installation proof uploaded. Completion WhatsApp logged.</p>`;
+    } catch (error) {
+      showError("#install-result", error);
     }
-    order.installationFiles = files;
-    order.status = "Completed";
-    order.completedAt = nowIso();
-    addMessage(order.id, order.ownerPhone, "installation_completed", `Installation completed for ${order.plate}. We can also help with car insurance renewal.`);
-    saveState();
-    document.querySelector("#installer-result").innerHTML = `<div class="card" style="margin-top:18px"><p class="success">Installation proof uploaded. Mock completion WhatsApp sent.</p></div>`;
   });
 }
 
 function renderNotFound() {
-  appShell(`<div class="empty">Page not found.</div>`);
-  bindShellActions();
+  setApp(`<div class="empty">Page not found.</div>`);
 }
 
-function render() {
+async function render() {
   const hash = location.hash || "#/";
-  if (hash.startsWith("#/login")) return renderLogin();
+  if (ADMIN_HOST) {
+    if (hash.startsWith("#/admin")) return renderAdmin();
+    if (hash.startsWith("#/installer")) return renderInstaller();
+    return renderStaffLogin();
+  }
+  if (hash.startsWith("#/login")) return renderCustomerLogin();
   if (hash.startsWith("#/order-success")) return renderOrderSuccess();
   if (hash.startsWith("#/order")) return renderOrder();
   if (hash.startsWith("#/account")) return renderAccount();
-  if (hash.startsWith("#/staff")) return renderStaffEntry();
-  if (hash.startsWith("#/admin")) return renderAdmin();
-  if (hash.startsWith("#/installer")) return renderInstaller();
   if (hash === "#/" || hash === "") return renderHome();
   return renderNotFound();
 }
