@@ -81,7 +81,7 @@ Cloudflare services:
 ```text
 Workers  API, auth, payment webhooks, WhatsApp webhooks
 D1       orders, customers, staff, sessions, audit logs
-R2       Geran/VOC and installation photos
+R2       Geran/VOC and installation photos, later when enabled
 Assets   frontend files
 ```
 
@@ -122,7 +122,7 @@ POST /api/webhooks/whatsapp
 POST /api/webhooks/toyyibpay
 ```
 
-Before deploy, create these in Cloudflare:
+Before full production, create these in Cloudflare:
 
 ```text
 D1 database: eplate-prod
@@ -155,6 +155,26 @@ Set this to use real providers:
 
 ```text
 MOCK_PROVIDERS = "false"
+```
+
+R2 is optional for the first Cloudflare deploy. The current config uses:
+
+```text
+FILE_STORAGE = "mock"
+```
+
+When R2 is enabled in Cloudflare, add this binding back to `wrangler.toml`:
+
+```toml
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "eplate-uploads"
+```
+
+Then set:
+
+```text
+FILE_STORAGE = "r2"
 ```
 
 Staff accounts should be created through:

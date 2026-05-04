@@ -236,6 +236,9 @@ async function downloadFile(request, env, fileId) {
   if (auth.response) return auth.response;
   const file = await env.DB.prepare("SELECT * FROM files WHERE id = ?").bind(fileId).first();
   if (!file) return json({ error: "File not found" }, 404);
+  if (file.r2_key.startsWith("mock://")) {
+    return json({ error: "This preview file was recorded without R2 storage enabled." }, 409);
+  }
   const object = await env.UPLOADS.get(file.r2_key);
   if (!object) return json({ error: "Stored file not found" }, 404);
   await audit(env, auth, "file.download", "file", file.id, { orderId: file.order_id });
@@ -357,7 +360,10 @@ async function persistFile(env, orderId, kind, file, uploadedByType, uploadedByI
   const id = newId("file");
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const key = `${orderId}/${kind}/${id}-${safeName}`;
-  await env.UPLOADS.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" } });
+  const storageKey = env.FILE_STORAGE === "r2" && env.UPLOADS ? key : `mock://${key}`;
+  if (env.FILE_STORAGE === "r2" && env.UPLOADS) {
+    await env.UPLOADS.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" } });
+  }
   const record = {
     id,
     order_id: orderId,
@@ -365,7 +371,7 @@ async function persistFile(env, orderId, kind, file, uploadedByType, uploadedByI
     filename: safeName,
     content_type: file.type || "application/octet-stream",
     size: file.size,
-    r2_key: key,
+    r2_key: storageKey,
     uploaded_by_type: uploadedByType,
     uploaded_by_id: uploadedById,
     created_at: now()
