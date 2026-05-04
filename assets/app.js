@@ -91,7 +91,6 @@ function setApp(content, active = "") {
     <button class="${active === "installer" ? "active" : ""}" data-route="#/installer">Installer</button>
     ${staff ? `<button data-action="logout">Logout ${html(staff.username)}</button>` : ""}
   ` : `
-    <button class="${active === "home" ? "active" : ""}" data-route="#/">Home</button>
     <button class="${active === "order" ? "active" : ""}" data-route="#/order">Order</button>
     <button class="${active === "account" ? "active" : ""}" data-route="#/account">Account</button>
     <button class="primary" data-route="#/login">Customer Login</button>
@@ -126,33 +125,6 @@ function getStaff() {
 
 function showError(target, error) {
   qs(target).innerHTML = `<p class="error">${html(error.message || error)}</p>`;
-}
-
-function renderHome() {
-  if (ADMIN_HOST) return renderStaffLogin();
-  setApp(`
-    <section class="hero">
-      <div>
-        <div class="kicker">Customer order app</div>
-        <h1>Order your JPJePlate online.</h1>
-        <p class="lead">Login with phone OTP, enter vehicle details, preview your number plate, pay, upload documents, and download invoices from your account.</p>
-        <div class="row">
-          <button class="btn primary" data-route="#/order">Start order</button>
-          <button class="btn" data-route="#/account">My account</button>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="plate-preview">
-          <div>
-            <div class="plate-number">JLM8733</div>
-            <div class="plate-caption">Plate-only customer confirmation preview</div>
-          </div>
-        </div>
-        <div class="price">${money(PRICE)}</div>
-        <p class="muted">Fixed product price. Geran/VOC and chassis can be uploaded after payment if not available during order.</p>
-      </div>
-    </section>
-  `, "home");
 }
 
 function renderCustomerLogin(next = "#/account") {
@@ -599,7 +571,7 @@ async function render() {
   if (hash.startsWith("#/order-success")) return renderOrderSuccess();
   if (hash.startsWith("#/order")) return renderOrder();
   if (hash.startsWith("#/account")) return renderAccount();
-  if (hash === "#/" || hash === "") return renderHome();
+  if (hash === "#/" || hash === "") return renderOrder();
   return renderNotFound();
 }
 
