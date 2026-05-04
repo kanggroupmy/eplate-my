@@ -1,4 +1,4 @@
-name = "eplate-app"
+name = "eplate-order"
 main = "src/worker.js"
 compatibility_date = "2026-05-04"
 
@@ -10,7 +10,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "eplate-prod"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "ac275745-f2e4-4dcb-875b-4cf5d5c3b8ce"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
