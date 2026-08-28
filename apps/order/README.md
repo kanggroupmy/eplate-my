@@ -1,6 +1,8 @@
-# ePlate Pre-Launch App
+# ePlate Order and Admin Platform
 
-This is a separate working preview app for the order system. It does not replace the SEO site in `/Users/jkang/Documents/eplate-static`.
+This application is the operational part of the `eplate-my` monorepo. It serves
+the customer ordering system, staff dashboard, and Cloudflare backend without
+replacing the public website at the repository root.
 
 ## Run locally
 
@@ -44,26 +46,9 @@ All data is stored in browser `localStorage`.
 
 ## Publish target
 
-This app is prepared for GitHub Pages on:
-
-```text
-order.eplate.my
-```
-
-The `CNAME` file is already included.
-
-Recommended publishing path:
-
-1. Create a new GitHub repository, for example `eplate-order`.
-2. Push this folder to that repository.
-3. Enable GitHub Pages from the `main` branch root.
-4. In Cloudflare DNS, add:
-
-```text
-order  CNAME  jasonzlah.github.io
-```
-
-Keep the record DNS only until GitHub Pages verifies the custom domain.
+Deploy this application from the monorepo's `apps/order` directory. Cloudflare
+serves `order.eplate.my` and `admin.eplate.my`; the root website continues to be
+published separately through GitHub Pages.
 
 ## Cloudflare production architecture
 

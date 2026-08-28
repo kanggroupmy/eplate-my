@@ -1,19 +1,39 @@
-# ePlate.my Static Site
+# ePlate Platform
 
-Static landing page for `eplate.my`, ready for GitHub Pages.
+The KANG Group monorepo for the public ePlate website, customer ordering app,
+staff dashboard, and Cloudflare backend.
 
-## Deploy on GitHub Pages
+## Applications
 
-1. Create a public GitHub repository.
-2. Upload these files to the repository root.
-3. In GitHub, open `Settings > Pages`.
-4. Set source to `Deploy from a branch`, then choose `main` and `/root`.
-5. Keep the custom domain as `eplate.my`.
-6. In your DNS provider, point `eplate.my` to GitHub Pages and enable HTTPS after DNS propagation.
+| Path | Domains | Deployment |
+| --- | --- | --- |
+| `/` | `eplate.my` | GitHub Pages from `main` and `/root` |
+| `apps/order` | `order.eplate.my`, `admin.eplate.my` | Cloudflare Worker named `eplate-order` |
 
-## Before Launch
+The public website remains at the repository root so its existing GitHub Pages
+deployment continues without interruption. The order application retains its
+own package, migrations, Worker configuration, and deployment lifecycle under
+`apps/order`.
 
-- Replace the placeholder WhatsApp number in `index.html`.
-- Replace the placeholder business address if you want Google Business Profile consistency.
-- Confirm any "authorised installer" claims match your JPJePlate approval documents.
-- Add Google Search Console verification after the domain is connected.
+## Deployments
+
+### Public website
+
+GitHub Pages deploys the `main` branch from `/root`. The custom domain is stored
+in the root `CNAME` file.
+
+### Order and admin platform
+
+Run Cloudflare commands from `apps/order`:
+
+```sh
+cd apps/order
+npm ci
+npm run deploy
+```
+
+If using Cloudflare's Git integration, set the project root directory to
+`apps/order`. Database migrations remain in `apps/order/migrations`.
+
+Provider credentials and production tokens must be stored as Cloudflare
+secrets, never committed to this repository.
