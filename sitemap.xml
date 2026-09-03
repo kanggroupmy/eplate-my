@@ -8,7 +8,7 @@
   </url>
   <url>
     <loc>https://eplate.my/blog/</loc>
-    <lastmod>2026-05-19</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -69,6 +69,12 @@
   <url>
     <loc>https://eplate.my/iskandar-puteri/</loc>
     <lastmod>2026-05-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://eplate.my/blog/jpjeplate-ice-hybrid-malaysia-rollout/</loc>
+    <lastmod>2026-09-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
