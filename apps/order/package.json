@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node -e \"console.error('Retired deployment path. Deploy website/ to Vercel; read RETIREMENT.md.'); process.exit(1)\"",
     "db:migrate:local": "wrangler d1 migrations apply eplate-prod --local",
     "db:migrate": "wrangler d1 migrations apply eplate-prod --remote"
   },

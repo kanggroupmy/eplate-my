@@ -1,5 +1,7 @@
 # ePlate Platform
 
+> Canonical application: `website/` (Next.js, Supabase Auth/Postgres/private Storage, Vercel). The sole repository is `kanggroupmy/eplate-my`. The historical deployment instructions below describe the preserved legacy system and must not be used to deploy the ordering backend. Read [handoff](website/docs/HANDOFF.md), [operations](website/docs/OPERATIONS.md), and [legacy retirement](apps/order/RETIREMENT.md). Vercel's Root Directory must be `website`. Root static pages remain intact until domain cutover. The public Vercel release is live; transactional setup remains pending.
+
 The KANG Group monorepo for the public ePlate website, customer ordering app,
 staff dashboard, and Cloudflare backend.
 

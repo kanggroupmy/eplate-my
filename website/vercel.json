@@ -1,0 +1,18 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "order.eplate.my"
+        }
+      ],
+      "destination": "https://eplate.my/order/",
+      "permanent": true
+    }
+  ],
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci"
+}

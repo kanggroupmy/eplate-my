@@ -1,0 +1,23 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0D1117"/>
+  <g opacity="0.05">
+    <path d="M0 70H1200M0 140H1200M0 210H1200M0 280H1200M0 350H1200M0 420H1200M0 490H1200M0 560H1200" stroke="white"/>
+    <path d="M80 0V630M160 0V630M240 0V630M320 0V630M400 0V630M480 0V630M560 0V630M640 0V630M720 0V630M800 0V630M880 0V630M960 0V630M1040 0V630M1120 0V630" stroke="white"/>
+  </g>
+  <ellipse cx="600" cy="95" rx="410" ry="220" fill="#C62828" opacity="0.18"/>
+  <rect x="86" y="82" width="72" height="72" rx="16" fill="#C62828"/>
+  <text x="122" y="130" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="800">JP</text>
+  <text x="178" y="126" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">JPJePlate Installer</text>
+  <text x="86" y="248" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="800">Order your JPJePlate.</text>
+  <text x="86" y="336" fill="#EF5350" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="800">Installed in Johor Bahru.</text>
+  <text x="88" y="406" fill="#AAB4C2" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500">ZEV/EV JPJePlate order support · RM150 installed package</text>
+  <text x="88" y="448" fill="#AAB4C2" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500">Official RM98 plate set separated from local service package</text>
+  <g transform="translate(86 505)">
+    <rect width="490" height="90" rx="10" fill="white"/>
+    <rect x="9" y="9" width="60" height="72" rx="6" fill="#003399"/>
+    <text x="39" y="38" text-anchor="middle" fill="#FFD700" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800">MAL</text>
+    <text x="92" y="59" fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="800" letter-spacing="7">EV 2026</text>
+    <rect x="410" y="28" width="42" height="28" rx="5" fill="#D8B84F"/>
+    <text x="431" y="73" text-anchor="middle" fill="#555555" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800">RFID</text>
+  </g>
+</svg>
