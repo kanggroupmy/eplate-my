@@ -1,5 +1,14 @@
 # Implementation ledger
 
+## Current status — 11 September 2026 (supersedes older entries below)
+
+- Canonical source published to `kanggroupmy/eplate-my` main at `15223e4`; Vercel Git deployment READY, Root Directory `website`.
+- Business Supabase project confirmed and linked. Empty project verified by database counts before applying all three baseline migrations. RLS/private buckets/service-only business RPCs verified remotely.
+- Additive function hardening migration and regression assertions added following hosted security review; see HANDOFF.md and VERIFICATION.md for application/check results.
+- Local lint, typecheck, 16 tests plus database scenario, and build passed before publication. Public home/order HTTP 200, readiness 503 as expected without configuration.
+- Legacy D1 baseline found in `apps/order/migrations/0001_initial.sql`; historical source preserved, normal deploy command disabled. Remote data and writer still require account-backed review.
+- Remaining work: legacy backup/import/reconciliation, SMTP/Auth and staff setup, secure Vercel environment setup, ToyyibPay/Meta credentials and acceptance, scheduler/alerts, business retention/invoice decisions, real customer/staff acceptance and approved domain cutover. No claim of full production readiness.
+
 ## Confirmed facts
 - Canonical application is `website/`: patched Next.js 15, Supabase Auth/Postgres/private Storage; Vercel target, Cloudflare DNS/edge only.
 - Workspace parent and `order-app/` are not Git repositories. Existing modified README, DNS notes and static index, plus untracked application files, were preserved. No commit or deployment was made.

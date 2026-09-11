@@ -1,4 +1,26 @@
-# Handoff — 7 September 2026
+# Handoff — current update 11 September 2026
+
+## Current authoritative status (supersedes historical sections below)
+
+- Published source: `kanggroupmy/eplate-my`, commit `15223e4`, canonical app under `website/`. Active checkout: `/Users/jkang/.cache/eplate-canonical-publish`. Preserve the original dirty Google Drive checkout; do not reset or publish it over this checkout.
+- Vercel Git integration is connected to that repository, restricted to that one repository, with Root Directory `website`. Git-triggered production deployment `dpl_6Ee9CdjcyCbeuahpRZ14tL8NxDVC` is READY at https://eplate-38i09xzpi-eplatemy.vercel.app and https://eplate-my.vercel.app. Home and order routes return 200; health returns 503 because transactional configuration is absent. Do not reconnect the old repository or repeat account installation.
+- Supabase CLI is authenticated through the selected business account and linked to `cyyhtcwbhtxpwrwkquru`. Before migration, direct database counts verified zero public tables, zero Auth users and zero Storage objects. The three baseline migrations were applied successfully and recorded remotely. All application tables have RLS enabled, all four buckets are private with 4 MiB limits, and browser roles have no execute grants on `eplate_*` business RPCs.
+- Hosted security review identified mutable trigger search paths and anonymous access to boolean ownership helpers. Follow-up migration `202609110001_function_hardening.sql` fixes those issues while retaining signed-in helper execution required by RLS. The full local database scenario passed with all four migrations and new privilege assertions; the fourth migration was then successfully applied remotely. The remaining signed-in SECURITY DEFINER helper advisories are intentional: helpers return only current-user role/ownership booleans; they cannot change records.
+- No Vercel environment secrets were added. This intentionally keeps customer ordering unavailable while SMTP, payment, notification and legacy-data acceptance remain incomplete. Do not activate a second writer before legacy reconciliation.
+- The legacy baseline is present at `apps/order/migrations/0001_initial.sql`; follow `apps/order/RETIREMENT.md`. Root static pages and legacy source remain preserved; legacy package deployment is disabled locally. Existing remote Worker/D1/R2 contents and writer status are unverified. No DNS changes or legacy data imports were made.
+
+### Next required account actions
+
+1. Obtain access to the legacy Cloudflare Worker/D1/R2 inventory; back up, restore-test and reconcile any records before enabling the new writer. Do not assume the empty new Supabase project means the legacy system has no customers.
+2. Configure SMTP and Auth callback allowlist for the chosen production host; securely populate Supabase/Vercel settings, rate-limit and scheduler secrets. Confirm the initial named staff identities after their first sign-in; never infer admin roles from email.
+3. Supply ToyyibPay merchant/category access and Meta business phone/app/token plus approved transactional templates. Keep credentials in provider/Vercel secret settings, never conversation text or git. Complete provider acceptance and protected scheduler setup.
+4. Confirm invoice business identity, pricing, retention, backup/recovery targets and operational ownership. Run real role, upload, invoice, payment and notification acceptance before DNS/traffic cutover.
+
+### Release and rollback
+
+Changes pushed to canonical main deploy automatically from `website/`. Use the full repository root for any CLI deployment with this Root Directory setting; the earlier flat `/Users/jkang/.cache/eplate-release` copy is unsuitable for new deployment. Preserve additive database migrations during app rollback. A verified compatible limited-release fallback is https://eplate-flb2jqqzk-eplatemy.vercel.app; never promote the failed June release or restart the legacy backend. No DNS rollback is currently needed.
+
+The sections below are historical evidence only; their statements that source is unpublished, D1 schema is missing or migrations are unapplied are obsolete.
 
 ## Canonical repository publication
 

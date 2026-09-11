@@ -8,6 +8,10 @@ const ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-22222
 for(const id of ids) await db.query('insert into auth.users values($1,$2)',[id,id+'@example.test']);
 await db.query("insert into admin_users(user_id,role) values($1,'admin'),($2,'installer')",[ids[2],ids[3]]);
 const draft={owner_name:'Test owner',vehicle_registration:'JAB123',chassis_vin:'VIN123456',vehicle_type_confirmed:true,whatsapp_phone:'60123456789'};
+for (const helper of ['public.is_admin()', 'public.order_belongs_to_current_user(uuid)']) {
+  const privileges = (await db.query("select has_function_privilege('anon',$1,'execute') as anonymous, has_function_privilege('authenticated',$1,'execute') as signed_in", [helper])).rows[0];
+  if (privileges.anonymous || !privileges.signed_in) throw Error('Ownership helper access boundary failed');
+}
 async function mutate(actor,action,order,data={}){return (await db.query('select eplate_mutate($1,$2,$3,$4) as result',[actor,action,order,data])).rows[0].result;}
 async function denied(fn){try{await fn()}catch{return;}throw Error('Expected denial');}
 const order=await mutate(ids[0],'draft',null,draft);

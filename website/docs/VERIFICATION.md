@@ -1,5 +1,13 @@
 # Verification record — 7 September 2026
 
+## Hosted verification — 11 September 2026
+
+The canonical Git publication passed lint, standalone typecheck, all 16 focused tests plus the database scenario, and production build on Node 22. Vercel's Git-triggered deployment is READY; home and order return 200 and health returns 503 with transactional settings absent.
+
+Before remote migration, Supabase SQL returned zero public tables, Auth users and Storage objects. Three baseline migrations then applied successfully. Hosted checks returned no application tables without RLS, four private buckets limited to 4194304 bytes, and no anon/authenticated execute grants on `eplate_*` business RPCs. No user/document data was read or created.
+
+Security Advisor findings prompted additive `202609110001_function_hardening.sql`: fixed trigger search paths and removed anonymous ownership-helper execution. The full local database scenario passed with all four migrations, including new anonymous/signed-in helper privilege assertions, and the fourth migration applied successfully to the hosted project. Authenticated boolean helper execution remains required for RLS and is intentionally retained. This is schema/security verification, not real SMTP, login, Storage upload, payment or WhatsApp acceptance. Historical statements below about no remote migrations/deployments are superseded.
+
 ## Local results
 
 - Clean dependency install and audit: zero reported vulnerabilities. Next.js 15.5.24 and patched PostCSS 8.5.28 replace vulnerable dependencies. PGlite is a development-only dependency for repeatable SQL tests.
