@@ -1,6 +1,7 @@
 import { normalizeMalaysianPhone } from "@/lib/operations-upload";
 import { requireOperations, authorizeOrder, operationFailure, OperationError, mutate, requireUuid, orderFilters, orderListQuery } from "@/lib/operations";
 import { ORDER_STATUSES } from "@/lib/domain";
+import { VEHICLE_BRANDS, FITMENT_KEY } from "@/lib/order-options";
 import { boundedBody } from "@/lib/security";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
@@ -86,6 +87,8 @@ export async function POST(request: Request) {
             throw new OperationError("Invalid information.");
         const data = body.data as Record<string, unknown>;
         if (action === 'draft') {
+            if (!VEHICLE_BRANDS.some(brand => brand === data.vehicle_brand) || data.vehicle_usage !== 'on_the_road' || data.workshop_key !== FITMENT_KEY)
+                throw new OperationError('Select a vehicle brand and the available fitment location. Only on the road vehicles are accepted.');
             try { data.whatsapp_phone = normalizeMalaysianPhone(data.whatsapp_phone); }
             catch { throw new OperationError('Enter a valid Malaysian WhatsApp number.'); }
         }

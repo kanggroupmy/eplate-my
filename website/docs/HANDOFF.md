@@ -1,5 +1,15 @@
 # Handoff — current update 11 September 2026
 
+## Order form update — 14 September 2026
+
+Customer form now offers only on-the-road vehicles, the user's exact 53-brand list, one fitment dropdown option (One Auto Motoring, 34 Jalan Permas 9/7), and inline private VOC upload after saving the draft. Screw-bit and delivery-method controls are absent. Existing VIN and eligibility requirements remain. Migration 202609140001 adds nullable legacy-compatible vehicle columns, validates new/resumed drafts and preserves brand on replacement orders; prior migrations are unchanged. Full tests, database scenario including invalid brand/usage/location cases, lint, build and typecheck passed. Local rendered form inspected with synthetic customer data; real document uploads were not used. Preserve the preceding sign-in setup notes.
+
+## Sign-in configuration follow-up
+
+User selected sender `noreply@eplate.my` (name ePlate.my), initial admin email `1automotoring@gmail.com`, and confirmed Resend/Supabase SMTP connected. Resend business account is digital@kang-group.com; eplate.my was verified. A new sending-only, domain-restricted key named `ePlate Supabase SMTP` was created; its value was not printed or written to files. Admin role must wait for verified sign-in.
+
+The live sign-in failure was traced to zero Vercel environment variables. Added production NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (sensitive), NEXT_PUBLIC_SITE_URL, APP_URL and RATE_LIMIT_SECRET (sensitive). Keys were transferred through authenticated CLIs in memory without printing values. Site/Auth URLs now use https://eplate-my.vercel.app and exact allowed callback /auth/callback/. A production redeployment was requested to load the settings. This supersedes the no-environment-settings statement below. Payment/WhatsApp setup and real end-to-end acceptance remain outstanding; do not claim readiness from an HTTP 200 login acknowledgement alone.
+
 ## Current authoritative status (supersedes historical sections below)
 
 - Published source: `kanggroupmy/eplate-my`, commit `15223e4`, canonical app under `website/`. Active checkout: `/Users/jkang/.cache/eplate-canonical-publish`. Preserve the original dirty Google Drive checkout; do not reset or publish it over this checkout.

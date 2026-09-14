@@ -7,7 +7,7 @@ for(const f of readdirSync(new URL('../supabase/migrations/', import.meta.url)).
 const ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333','44444444-4444-4444-8444-444444444444'];
 for(const id of ids) await db.query('insert into auth.users values($1,$2)',[id,id+'@example.test']);
 await db.query("insert into admin_users(user_id,role) values($1,'admin'),($2,'installer')",[ids[2],ids[3]]);
-const draft={owner_name:'Test owner',vehicle_registration:'JAB123',chassis_vin:'VIN123456',vehicle_type_confirmed:true,whatsapp_phone:'60123456789'};
+const draft={vehicle_brand:'BYD',vehicle_usage:'on_the_road',workshop_key:'one_auto_permas_jaya',owner_name:'Test owner',vehicle_registration:'JAB123',chassis_vin:'VIN123456',vehicle_type_confirmed:true,whatsapp_phone:'60123456789'};
 for (const helper of ['public.is_admin()', 'public.order_belongs_to_current_user(uuid)']) {
   const privileges = (await db.query("select has_function_privilege('anon',$1,'execute') as anonymous, has_function_privilege('authenticated',$1,'execute') as signed_in", [helper])).rows[0];
   if (privileges.anonymous || !privileges.signed_in) throw Error('Ownership helper access boundary failed');
@@ -15,6 +15,10 @@ for (const helper of ['public.is_admin()', 'public.order_belongs_to_current_user
 async function mutate(actor,action,order,data={}){return (await db.query('select eplate_mutate($1,$2,$3,$4) as result',[actor,action,order,data])).rows[0].result;}
 async function denied(fn){try{await fn()}catch{return;}throw Error('Expected denial');}
 const order=await mutate(ids[0],'draft',null,draft);
+if(order.vehicle_brand!=='BYD'||order.vehicle_usage!=='on_the_road')throw Error('Vehicle details not persisted');
+await denied(()=>mutate(ids[0],'draft',order.id,{...draft,vehicle_brand:'Unknown'}));
+await denied(()=>mutate(ids[0],'draft',order.id,{...draft,vehicle_usage:'newly_purchased'}));
+await denied(()=>mutate(ids[0],'draft',order.id,{...draft,workshop_key:'other'}));
 if((await mutate(ids[0],'draft',null,draft)).id!==order.id)throw Error('Duplicate draft');
 await mutate(ids[0],'draft',order.id,{...draft,owner_name:'Resumed owner'});
 await denied(()=>mutate(ids[1],'draft',order.id,draft));
