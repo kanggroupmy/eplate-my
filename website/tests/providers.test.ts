@@ -16,6 +16,11 @@ test('callback requires authentic signature, unique fields and accepted state', 
   fields.append('amount', '1.00');
   assert.equal(verifyCallback(fields, 'secret'), false);
 });
+test('hosted sandbox requires preview and a separate database', () => {
+  const env = { NODE_ENV: 'production', VERCEL_ENV: 'preview', APP_ENV: 'sandbox', PAYMENT_PROVIDER_MODE: 'sandbox', NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co', SANDBOX_SUPABASE_URL: 'https://test.supabase.co', PRODUCTION_SUPABASE_URL: 'https://live.supabase.co', TOYYIBPAY_SECRET_KEY: 'test', TOYYIBPAY_CATEGORY_CODE: 'test' };
+  assert.equal(paymentConfig(env).baseUrl, 'https://dev.toyyibpay.com');
+  for (const override of [{ VERCEL_ENV: 'production' }, { NEXT_PUBLIC_SUPABASE_URL: env.PRODUCTION_SUPABASE_URL }, { PRODUCTION_SUPABASE_URL: env.SANDBOX_SUPABASE_URL }, { APP_ENV: '' }, { PAYMENT_PROVIDER_MODE: 'live' }, { PAYMENT_PROVIDER_MODE: 'fake' }]) assert.throws(() => paymentConfig({ ...env, ...override }));
+});
 test('provider reconciliation binds paid state to external order and exact amount', () => {
   const row = { billpaymentStatus: '1', billExternalReferenceNo: 'order', billpaymentAmount: '150.00', billpaymentInvoiceNo: 'ref_1' };
   assert.equal(verifiedTransaction([row], 'order', 15000)?.reference, 'ref_1');

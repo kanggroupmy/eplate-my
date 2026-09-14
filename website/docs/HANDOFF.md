@@ -1,5 +1,11 @@
 # Handoff — current update 11 September 2026
 
+## ToyyibPay sandbox — 14 September 2026
+
+Created isolated Supabase project `eplate-my-sandbox` (`zdnvidlckgewpyomebuj`) and applied all five migrations through `202609140001`. Created separate Vercel project `eplatemy/eplate-my-sandbox`, disconnected automatic Git deployment, and stored the user-authorized ToyyibPay sandbox credential/category only in its Preview environment. Stable test alias: https://eplate-my-sandbox-test.vercel.app. The deployment shows a prominent SANDBOX banner and points to the empty sandbox database. Production `eplate-my` and production Supabase remain separate.
+
+Code now permits ToyyibPay sandbox in a Vercel Preview only when APP_ENV=sandbox and explicit sandbox/production database URLs prove isolation; it remains forbidden in Vercel Production. Seventeen tests, database scenario, lint, build and typecheck pass. Sandbox Auth site/callback URL is configured. Custom SMTP for the separate sandbox project is still required before `1automotoring@gmail.com` can receive a sandbox magic link; create a domain-restricted sending key and store it directly in sandbox Supabase, never Vercel/source/docs. Then test sign-in, synthetic VOC upload, sandbox bill creation, callback replay and reconciliation. The pasted sandbox ToyyibPay key is test-only but should be rotated after acceptance because it appeared in chat.
+
 ## Order form update — 14 September 2026
 
 Customer form now offers only on-the-road vehicles, the user's exact 53-brand list, one fitment dropdown option (One Auto Motoring, 34 Jalan Permas 9/7), and inline private VOC upload after saving the draft. Screw-bit and delivery-method controls are absent. Existing VIN and eligibility requirements remain. Migration 202609140001 adds nullable legacy-compatible vehicle columns, validates new/resumed drafts and preserves brand on replacement orders; prior migrations are unchanged. Full tests, database scenario including invalid brand/usage/location cases, lint, build and typecheck passed. Local rendered form inspected with synthetic customer data; real document uploads were not used. Preserve the preceding sign-in setup notes.

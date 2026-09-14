@@ -27,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-MY">
       <body>
         <Nav />
+        {process.env.APP_ENV === 'sandbox' && <aside role="status" style={{ padding: '16px', background: '#fff3cd', color: '#332701', textAlign: 'center' }}><strong>SANDBOX — test orders only.</strong> No real payments or installation bookings. Use sample documents only.</aside>}
         {children}
         <Footer />
       </body>

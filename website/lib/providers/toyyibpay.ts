@@ -4,7 +4,12 @@ export type PaymentConfig = { mode: 'live' | 'sandbox' | 'fake'; baseUrl: string
 export function paymentConfig(env: Record<string, string | undefined> = process.env): PaymentConfig {
   const mode = env.PAYMENT_PROVIDER_MODE || 'live';
   if (!['live', 'sandbox', 'fake'].includes(mode)) throw new Error('Invalid payment mode');
-  if (mode !== 'live' && (env.NODE_ENV === 'production' || env.VERCEL_ENV === 'production')) throw new Error('Test payments forbidden in production');
+  const isolatedPreview = env.VERCEL_ENV === 'preview' && env.APP_ENV === 'sandbox'
+    && !!env.SANDBOX_SUPABASE_URL && !!env.PRODUCTION_SUPABASE_URL
+    && env.NEXT_PUBLIC_SUPABASE_URL === env.SANDBOX_SUPABASE_URL
+    && env.SANDBOX_SUPABASE_URL !== env.PRODUCTION_SUPABASE_URL;
+  if (mode !== 'live' && (env.VERCEL_ENV === 'production' || (env.NODE_ENV === 'production' && !(mode === 'sandbox' && isolatedPreview)))) throw new Error('Test payments forbidden in production');
+  if (env.APP_ENV === 'sandbox' && (mode !== 'sandbox' || !isolatedPreview)) throw new Error('Sandbox requires an isolated preview');
   if (mode === 'fake' && env.ALLOW_LOCAL_FAKE_PROVIDERS !== 'true') throw new Error('Fake providers require explicit local flag');
   const origin = new URL(env.APP_URL || env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
   if (mode === 'live' && origin.protocol !== 'https:') throw new Error('Live payments require HTTPS');

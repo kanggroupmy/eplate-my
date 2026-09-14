@@ -1,7 +1,9 @@
 import "server-only";
+import { paymentConfig } from './providers/toyyibpay';
 import { createClient } from "@supabase/supabase-js";
 
 export function createSupabaseAdminClient() {
+  if (process.env.APP_ENV === 'sandbox') paymentConfig();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
